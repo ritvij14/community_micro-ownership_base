@@ -4,9 +4,9 @@ async function main() {
   const Test = await ethers.getContractFactory("Test");
   const test = await Test.deploy("Hello, Base!");
 
-  await test.deployed();
+  await test.waitForDeployment();
 
-  console.log("Test contract deployed to:", test.address);
+  console.log("Test contract deployed to:", await test.getAddress());
 }
 
 main().catch((error) => {

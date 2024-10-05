@@ -2,13 +2,17 @@
 pragma solidity ^0.8.27;
 
 contract Test {
-    string public message;
+    string private _message;
 
-    constructor(string memory _message) {
-        message = _message;
+    constructor(string memory initialMessage) {
+        _message = initialMessage;
     }
 
-    function setMessage(string memory _message) public {
-        message = _message;
+    function message() public view returns (string memory) {
+        return _message;
+    }
+
+    function setMessage(string memory newMessage) public {
+        _message = newMessage;
     }
 }
