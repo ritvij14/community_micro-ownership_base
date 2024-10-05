@@ -1,0 +1,13 @@
+{
+  "name": "smart_contracts",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/bun": "latest",
+    "hardhat": "^2.22.12"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
