@@ -20,6 +20,26 @@
       "address": "0xb14c42317A9c90Bd6735D3B0d21403A4d2957b57",
       "txHash": "0xa7c9361e844de7a4b3421e9034518305ddaf2669ed3359803bf6b3f61f8e5d2f",
       "kind": "uups"
+    },
+    {
+      "address": "0x2D250e173172F0C67763bb70ed4a2C59273856a2",
+      "txHash": "0x6d73619e7b61cef29f4ce1850f6f384599d787387ed92dc6c51d047d3420b36b",
+      "kind": "uups"
+    },
+    {
+      "address": "0x86D6AaCDe1a30D634Ff7A41Acab3540ed62430A7",
+      "txHash": "0x3d8ad845735973f88298b70c9005b28cfb2ea47f46521203890577e2f5517354",
+      "kind": "uups"
+    },
+    {
+      "address": "0xA7637215687454dA2715905a651B423113d82971",
+      "txHash": "0x9cd559d4328010440df08f27bcca8080aa917b0f3b77453278d2a93f429bbb8a",
+      "kind": "uups"
+    },
+    {
+      "address": "0x8206E238b2dE3711A005518a0addF9c9e2cf4426",
+      "txHash": "0x787b4f05fc9c64d87d6b4243fd6556f91dee7bbf9e992d825061dcf9a07abed8",
+      "kind": "uups"
     }
   ],
   "impls": {
@@ -800,6 +820,207 @@
               "label": "_owner",
               "type": "t_address",
               "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "03add6d5fdd6b8f46e0ed2740a5d3174d77d4aafd5b7824bd478ae27d4595ddc": {
+      "address": "0x2Cf7D0A4f14f800fB2778aA86D3a77963A98e8A3",
+      "txHash": "0xd1d5cca5e4504fd1f388edf6ee0919500b503adfdedbdaa04fa86a2ce1c97901",
+      "layout": {
+        "solcVersion": "0.8.20",
+        "storage": [
+          {
+            "label": "_communityIds",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256",
+            "contract": "CommunityDAOUpgradeable",
+            "src": "contracts/CommunityDAOUpgradeable.sol:32"
+          },
+          {
+            "label": "communities",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_uint256,t_struct(Community)5266_storage)",
+            "contract": "CommunityDAOUpgradeable",
+            "src": "contracts/CommunityDAOUpgradeable.sol:33"
+          },
+          {
+            "label": "governanceToken",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_contract(GovernanceTokenUpgradeable)6700",
+            "contract": "CommunityDAOUpgradeable",
+            "src": "contracts/CommunityDAOUpgradeable.sol:34"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(RoleData)24_storage)": {
+            "label": "mapping(bytes32 => struct AccessControlUpgradeable.RoleData)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(AccessControlStorage)34_storage": {
+            "label": "struct AccessControlUpgradeable.AccessControlStorage",
+            "members": [
+              {
+                "label": "_roles",
+                "type": "t_mapping(t_bytes32,t_struct(RoleData)24_storage)",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(InitializableStorage)211_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(RoleData)24_storage": {
+            "label": "struct AccessControlUpgradeable.RoleData",
+            "members": [
+              {
+                "label": "hasRole",
+                "type": "t_mapping(t_address,t_bool)",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "adminRole",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_contract(GovernanceTokenUpgradeable)6700": {
+            "label": "contract GovernanceTokenUpgradeable",
+            "numberOfBytes": "20"
+          },
+          "t_enum(CommunityType)5253": {
+            "label": "enum CommunityDAOUpgradeable.CommunityType",
+            "members": [
+              "Residential",
+              "Commercial"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_uint256,t_struct(Community)5266_storage)": {
+            "label": "mapping(uint256 => struct CommunityDAOUpgradeable.Community)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Community)5266_storage": {
+            "label": "struct CommunityDAOUpgradeable.Community",
+            "members": [
+              {
+                "label": "name",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "communityType",
+                "type": "t_enum(CommunityType)5253",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "creator",
+                "type": "t_address",
+                "offset": 1,
+                "slot": "1"
+              },
+              {
+                "label": "members",
+                "type": "t_array(t_address)dyn_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "adminRole",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "3"
+              }
+            ],
+            "numberOfBytes": "128"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.AccessControl": [
+            {
+              "contract": "AccessControlUpgradeable",
+              "label": "_roles",
+              "type": "t_mapping(t_bytes32,t_struct(RoleData)24_storage)",
+              "src": "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:61",
               "offset": 0,
               "slot": "0"
             }

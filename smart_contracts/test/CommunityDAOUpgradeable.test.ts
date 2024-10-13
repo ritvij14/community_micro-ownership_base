@@ -41,11 +41,22 @@ describe("CommunityDAOUpgradeable", function () {
         .withArgs(1, "Test Community", 0, owner.address);
     });
 
-    it("Should make the creator a member and mint a token", async function () {
+    it("Should make the creator a member, mint a token, and assign community admin role", async function () {
       await communityDAO.createCommunity("Test Community", 0);
       const members = await communityDAO.getCommunityMembers(1);
       expect(members).to.include(owner.address);
       expect(await governanceToken.balanceOf(owner.address)).to.equal(1);
+      expect(await communityDAO.isCommunityAdmin(1, owner.address)).to.be.true;
+    });
+
+    it("Should allow any user to create a community", async function () {
+      await expect(
+        communityDAO.connect(addr1).createCommunity("New Community", 1)
+      ) // 1 for Commercial
+        .to.emit(communityDAO, "CommunityCreated")
+        .withArgs(1, "New Community", 1, addr1.address);
+
+      expect(await communityDAO.isCommunityAdmin(1, addr1.address)).to.be.true;
     });
   });
 
@@ -54,11 +65,17 @@ describe("CommunityDAOUpgradeable", function () {
       await communityDAO.createCommunity("Test Community", 0);
     });
 
-    it("Should add a new member and mint a token", async function () {
+    it("Should allow community admin to add a new member and mint a token", async function () {
       await expect(communityDAO.addMember(1, addr1.address))
         .to.emit(communityDAO, "MemberAdded")
         .withArgs(1, addr1.address);
       expect(await governanceToken.balanceOf(addr1.address)).to.equal(1);
+    });
+
+    it("Should not allow non-admin to add a member", async function () {
+      await expect(
+        communityDAO.connect(addr1).addMember(1, addr2.address)
+      ).to.be.revertedWith("Caller is not a community admin");
     });
 
     it("Should not allow adding an existing member", async function () {
@@ -75,11 +92,17 @@ describe("CommunityDAOUpgradeable", function () {
       await communityDAO.addMember(1, addr1.address);
     });
 
-    it("Should remove a member and burn their token", async function () {
+    it("Should allow community admin to remove a member and burn their token", async function () {
       await expect(communityDAO.removeMember(1, addr1.address))
         .to.emit(communityDAO, "MemberRemoved")
         .withArgs(1, addr1.address);
       expect(await governanceToken.balanceOf(addr1.address)).to.equal(0);
+    });
+
+    it("Should not allow non-admin to remove a member", async function () {
+      await expect(
+        communityDAO.connect(addr1).removeMember(1, addr1.address)
+      ).to.be.revertedWith("Caller is not a community admin");
     });
 
     it("Should not allow removing a non-member", async function () {
@@ -133,6 +156,25 @@ describe("CommunityDAOUpgradeable", function () {
 
     it("Should return false for non-members", async function () {
       expect(await communityDAO.isMember(1, addr2.address)).to.be.false;
+    });
+  });
+
+  describe("Check Community Admin", function () {
+    beforeEach(async function () {
+      await communityDAO.createCommunity("Test Community", 0);
+    });
+
+    it("Should return true for community admin", async function () {
+      expect(await communityDAO.isCommunityAdmin(1, owner.address)).to.be.true;
+    });
+
+    it("Should return false for non-admin members", async function () {
+      await communityDAO.addMember(1, addr1.address);
+      expect(await communityDAO.isCommunityAdmin(1, addr1.address)).to.be.false;
+    });
+
+    it("Should return false for non-members", async function () {
+      expect(await communityDAO.isCommunityAdmin(1, addr2.address)).to.be.false;
     });
   });
 });

@@ -1,9 +1,11 @@
 # Base Sepolia Contract Addresses:
 
-- GovernanceTokenUpgradeable deployed to: 0xaF7dE49f0FC1F540307269a4C2846fd472b2f1F7
-- CommunityDAOUpgradeable deployed to: 0xB4130c9473D87bDd73d7D5BcF1F960F8eAE35eC7
-- VotingMechanismUpgradeable deployed to: 0xb2049388033F6dC5C6e92eD4A54c856a69C92A9A
-- FundManagementUpgradeable deployed to: 0xb14c42317A9c90Bd6735D3B0d21403A4d2957b57
+Deploying contracts with the account: 0x3e8172a73c3530075D512D3e93B4F6667bAd489A
+
+- GovernanceTokenUpgradeable deployed to: 0x2D250e173172F0C67763bb70ed4a2C59273856a2
+- CommunityDAOUpgradeable deployed to: 0x86D6AaCDe1a30D634Ff7A41Acab3540ed62430A7
+- VotingMechanismUpgradeable deployed to: 0xA7637215687454dA2715905a651B423113d82971
+- FundManagementUpgradeable deployed to: 0x8206E238b2dE3711A005518a0addF9c9e2cf4426
 
 # Sample Hardhat Project
 
