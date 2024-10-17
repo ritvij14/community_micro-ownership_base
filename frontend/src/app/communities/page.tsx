@@ -2,8 +2,9 @@
 
 import { initializeContracts } from "@/lib/contracts";
 import { supabase } from "@/lib/supabase";
-import { getUserCommunities, joinCommunity } from "@/lib/user";
+import { getUserCommunities } from "@/lib/user";
 import { usePrivy } from "@privy-io/react-auth";
+import { ethers } from "ethers";
 import { useEffect, useState } from "react";
 
 interface Community {
@@ -16,6 +17,7 @@ interface Community {
   nft_token_id: number;
   fund_balance: number;
   safe_wallet_address: string;
+  admin_email: string; // Add this field
 }
 
 export default function Communities() {
@@ -23,18 +25,23 @@ export default function Communities() {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [userCommunities, setUserCommunities] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [joinLoading, setJoinLoading] = useState<string | null>(null);
+  const [userWalletAddress, setUserWalletAddress] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     async function initialize() {
       if (user?.wallet) {
         const provider = await getEthereumProvider();
         await initializeContracts(provider);
+        const signer = new ethers.providers.Web3Provider(provider).getSigner();
+        const address = await signer.getAddress();
+        setUserWalletAddress(address);
       }
 
       if (user?.id) {
         const userCommunitiesData = await getUserCommunities(user.id);
-        setUserCommunities(userCommunitiesData);
+        setUserCommunities(userCommunitiesData.map((c) => c.id));
       }
       const { data, error } = await supabase.from("communities").select("*");
 
@@ -48,20 +55,6 @@ export default function Communities() {
 
     initialize();
   }, [user, getEthereumProvider]);
-
-  async function handleJoinCommunity(communityId: string) {
-    if (!user?.id) return;
-
-    setJoinLoading(communityId);
-    try {
-      await joinCommunity(user.id, communityId);
-      setUserCommunities([...userCommunities, communityId]);
-    } catch (error) {
-      console.error("Error joining community:", error);
-    } finally {
-      setJoinLoading(null);
-    }
-  }
 
   if (loading) {
     return <div>Loading...</div>;
@@ -79,15 +72,12 @@ export default function Communities() {
             <p className="mb-2">Members: {community.member_ids.length}</p>
             <p className="mb-4">Fund Balance: ${community.fund_balance}</p>
             {!userCommunities.includes(community.id) ? (
-              <button
-                onClick={() => handleJoinCommunity(community.id)}
-                className={`btn btn-primary ${
-                  joinLoading === community.id ? "loading" : ""
-                }`}
-                disabled={joinLoading !== null}
-              >
-                {joinLoading === community.id ? "Joining..." : "Join Community"}
-              </button>
+              <div>
+                <p className="mb-2">
+                  To join, contact admin at: {community.admin_email}
+                </p>
+                <p className="mb-2">Your wallet address: {userWalletAddress}</p>
+              </div>
             ) : (
               <span className="text-green-600">You're a member</span>
             )}

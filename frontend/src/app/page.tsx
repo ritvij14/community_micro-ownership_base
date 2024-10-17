@@ -2,18 +2,37 @@
 
 import { usePrivy } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  const { login, authenticated } = usePrivy();
+  const { login, authenticated, ready } = usePrivy();
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
-  const handleGetStarted = () => {
+  useEffect(() => {
     if (authenticated) {
-      router.push("/onboarding");
+      router.push("/dashboard");
+    }
+  }, [authenticated, router]);
+
+  const handleGetStarted = async () => {
+    if (authenticated) {
+      router.push("/dashboard");
     } else {
-      login();
+      setLoading(true);
+      try {
+        await login();
+        // The useEffect hook will handle redirection after successful login
+      } catch (error) {
+        console.error("Authentication failed:", error);
+        setLoading(false);
+      }
     }
   };
+
+  if (!ready) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
@@ -27,9 +46,12 @@ export default function Home() {
       <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
         <button
           onClick={handleGetStarted}
-          className="btn btn-primary w-full sm:w-auto"
+          className={`btn btn-primary w-full sm:w-auto ${
+            loading ? "loading" : ""
+          }`}
+          disabled={loading}
         >
-          Get Started
+          {loading ? "Connecting..." : "Enter app"}
         </button>
       </div>
     </div>

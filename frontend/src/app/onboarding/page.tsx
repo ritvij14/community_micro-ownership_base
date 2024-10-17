@@ -4,7 +4,7 @@ import { initializeContracts } from "@/lib/contracts";
 import {
   createCommunity,
   createOrUpdateUser,
-  getCommunity,
+  getUserCommunities,
   updateUserCommunities,
 } from "@/lib/user";
 import { usePrivy } from "@privy-io/react-auth";
@@ -27,60 +27,93 @@ export default function Onboarding() {
   const { user, ready, authenticated, getAccessToken, getEthereumProvider } =
     usePrivy();
   const [error, setError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     async function initContracts() {
       if (authenticated && user?.wallet) {
-        const provider = getEthereumProvider();
-        await initializeContracts(provider);
+        try {
+          const provider = await getEthereumProvider();
+          if (!provider) {
+            throw new Error("Failed to get Ethereum provider");
+          }
+          await initializeContracts(provider);
+          console.log("Contracts initialized successfully");
+        } catch (error) {
+          console.error("Failed to initialize contracts:", error);
+          setError(
+            "Failed to initialize contracts. Please ensure you're connected to Base Sepolia network and try again."
+          );
+        }
       }
     }
     initContracts();
-  }, [authenticated, user]);
+  }, [authenticated, user, getEthereumProvider]);
 
   useEffect(() => {
     async function fetchCommunities() {
-      const communities = await getCommunity();
-      setAvailableCommunities(communities || []);
+      try {
+        const communities = await getUserCommunities(user?.id || "");
+        setAvailableCommunities(communities || []);
+      } catch (error) {
+        console.error("Error fetching communities:", error);
+        setError("Failed to fetch communities. Please try again.");
+      }
     }
-    fetchCommunities();
-  }, []);
+    if (user?.id) {
+      fetchCommunities();
+    }
+  }, [user?.id]);
 
   const handleFinish = async () => {
-    if (user?.id && authenticated) {
-      try {
-        setError(null);
-        const token = await getAccessToken();
-        const walletAddress = user?.wallet?.address;
+    if (isCreating) return; // Prevent multiple clicks
+    setIsCreating(true);
+    try {
+      if (user?.id && authenticated) {
+        try {
+          setError(null);
+          const token = await getAccessToken();
+          const walletAddress = user?.wallet?.address;
 
-        await createOrUpdateUser(
-          user.id,
-          user.email?.address || user?.google?.email || "",
-          displayName || user?.google?.name || "",
-          bio,
-          walletAddress
-        );
-
-        if (choice === "create") {
-          console.log("Creating community:", newCommunity);
-          const newCommunityData = await createCommunity(
-            newCommunity.name,
-            newCommunity.description,
-            newCommunity.type as "residential" | "commercial",
-            user.id
+          await createOrUpdateUser(
+            user.id,
+            user.email?.address || user?.google?.email || "",
+            displayName || user?.google?.name || "",
+            bio,
+            walletAddress
           );
-          console.log("Community created:", newCommunityData);
-        } else if (choice === "join" && selectedCommunities.length > 0) {
-          await updateUserCommunities(user.id, selectedCommunities);
-        }
 
-        router.push("/dashboard");
-      } catch (error) {
-        console.error("Detailed error in handleFinish:", error);
-        setError(
-          error instanceof Error ? error.message : JSON.stringify(error)
-        );
+          if (choice === "create") {
+            console.log("Creating community:", newCommunity);
+            const provider = await getEthereumProvider();
+            if (!provider) {
+              throw new Error("Failed to get Ethereum provider");
+            }
+            await initializeContracts(provider); // Ensure contracts are initialized
+            const newCommunityData = await createCommunity(
+              newCommunity.name,
+              newCommunity.description,
+              newCommunity.type as "residential" | "commercial",
+              user.id
+            );
+            console.log("Community created:", newCommunityData);
+          } else if (choice === "join" && selectedCommunities.length > 0) {
+            await updateUserCommunities(user.id, selectedCommunities);
+          }
+
+          router.push("/dashboard");
+        } catch (error) {
+          console.error("Detailed error in handleFinish:", error);
+          setError(
+            error instanceof Error ? error.message : JSON.stringify(error)
+          );
+        }
       }
+    } catch (error) {
+      console.error("Error creating community:", error);
+      setError(error instanceof Error ? error.message : "An error occurred");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -136,8 +169,16 @@ export default function Onboarding() {
             <option value="residential">Residential</option>
             <option value="commercial">Commercial</option>
           </select>
-          <button onClick={handleFinish} className="btn btn-primary w-full">
-            Create Community and Finish
+          <button
+            onClick={handleFinish}
+            className={`btn btn-primary ${
+              isCreating ? "loading loading-md" : "w-full"
+            }`}
+            disabled={isCreating}
+          >
+            {isCreating
+              ? "Creating Community..."
+              : "Create Community and Finish"}
           </button>
         </>
       );
@@ -169,6 +210,23 @@ export default function Onboarding() {
       );
     }
     return null;
+  };
+
+  const retryInitialization = async () => {
+    setError(null);
+    try {
+      const provider = await getEthereumProvider();
+      if (!provider) {
+        throw new Error("Failed to get Ethereum provider");
+      }
+      await initializeContracts(provider);
+      console.log("Contracts initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize contracts:", error);
+      setError(
+        "Failed to initialize contracts. Please ensure you're connected to Base Sepolia network and try again."
+      );
+    }
   };
 
   return (
@@ -207,6 +265,17 @@ export default function Onboarding() {
             renderForm()
           )}
         </div>
+        {/* {error && (
+          <div className="text-red-500 mb-4">
+            {error}
+            <button
+              onClick={retryInitialization}
+              className="btn btn-primary mt-2 w-full"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )} */}
       </div>
     </div>
   );

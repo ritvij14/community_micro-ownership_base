@@ -1,6 +1,13 @@
+import Safe, { Eip1193Provider } from "@safe-global/protocol-kit";
+import { SafeTransactionDataPartial } from "@safe-global/safe-core-sdk-types";
+import { ethers } from "ethers";
 import {
-  createCommunity as createCommunityOnChain,
+  createCommunityOnChain,
+  createProposal as createProposalOnChain,
+  executeProposal as executeProposalOnChain,
+  isCommunityMember as isCommunityMemberContract,
   mintMembershipNFT,
+  voteOnProposal as voteOnProposalOnChain,
 } from "./contracts";
 import { supabase } from "./supabase";
 
@@ -11,6 +18,20 @@ interface User {
   bio: string | null;
   wallet_address: string | null;
   communities: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Add this interface definition
+interface Proposal {
+  id: string;
+  community_id: string;
+  type: "funding" | "voting";
+  description: string;
+  amount?: string;
+  options?: string[];
+  safe_tx_hash?: string;
+  status: "active" | "executed";
   created_at: string;
   updated_at: string;
 }
@@ -98,10 +119,7 @@ export async function createCommunity(
     // Create community on-chain
     const communityId = await createCommunityOnChain(name, description, type);
 
-    // Mint NFT for the community creator
-    const tokenId = await mintMembershipNFT(communityId);
-
-    // If both on-chain operations are successful, update the database
+    // If on-chain operation is successful, update the database
     const { data, error } = await supabase
       .from("communities")
       .insert({
@@ -110,7 +128,7 @@ export async function createCommunity(
         description,
         type,
         member_ids: [creatorId],
-        nft_token_id: tokenId,
+        admin_id: creatorId,
       })
       .select();
 
@@ -121,7 +139,7 @@ export async function createCommunity(
 
     return data[0];
   } catch (error) {
-    console.error("Error creating community or minting NFT:", error);
+    console.error("Error creating community:", error);
     if (error instanceof Error) {
       throw new Error(`Failed to create community: ${error.message}`);
     } else {
@@ -130,22 +148,49 @@ export async function createCommunity(
   }
 }
 
-export async function getCommunity(communityId?: string) {
-  if (communityId) {
-    const { data, error } = await supabase
-      .from("communities")
-      .select("*")
-      .eq("id", communityId)
+export async function getCommunity(communityId: string) {
+  const { data: community, error } = await supabase
+    .from("communities")
+    .select("*")
+    .eq("id", communityId)
+    .single();
+
+  if (error) throw error;
+
+  // Fetch all member details
+  const { data: members, error: membersError } = await supabase
+    .from("users")
+    .select("id, display_name, email")
+    .in("id", community.member_ids || []);
+
+  if (membersError) {
+    console.error("Error fetching member details:", membersError);
+    throw membersError;
+  }
+
+  let admin = null;
+  console.log("community", community);
+  if (community.admin) {
+    // Fetch admin details
+    const { data: adminData, error: adminError } = await supabase
+      .from("users")
+      .select("id, display_name, email")
+      .eq("id", community.admin)
       .single();
 
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase.from("communities").select("*");
-
-    if (error) throw error;
-    return data;
+    if (adminError) {
+      console.error("Error fetching admin details:", adminError);
+      // Don't throw the error, just log it
+    } else {
+      admin = adminData;
+    }
   }
+
+  return {
+    ...community,
+    members: members || [],
+    admin,
+  };
 }
 
 export async function joinCommunity(userId: string, communityId: string) {
@@ -206,30 +251,250 @@ export async function leaveCommunity(userId: string, communityId: string) {
 }
 
 export async function getUserCommunities(userId: string) {
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("communities")
-    .eq("id", userId)
+  try {
+    // First, fetch all communities
+    const { data: allCommunities, error: communitiesError } = await supabase
+      .from("communities")
+      .select("*");
+
+    if (communitiesError) {
+      console.error("Error fetching communities:", communitiesError);
+      return [];
+    }
+
+    // Filter communities where the user is a member
+    const userCommunities = allCommunities.filter(
+      (community) =>
+        community.member_ids && community.member_ids.includes(userId)
+    );
+
+    return userCommunities;
+  } catch (error) {
+    console.error("Error in getUserCommunities:", error);
+    return [];
+  }
+}
+
+async function getSafeInstance(communityId: string): Promise<Safe> {
+  const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
+  const signer = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+
+  const { data: community } = await supabase
+    .from("communities")
+    .select("safe_address")
+    .eq("id", communityId)
     .single();
 
-  if (userError) {
-    console.error("Error fetching user communities:", userError);
-    return [];
+  if (!community?.safe_address) {
+    throw new Error("Safe address not found for this community");
   }
 
-  if (!user?.communities || user.communities.length === 0) {
-    return [];
+  const eip1193Provider: Eip1193Provider = {
+    request: async ({ method, params }) => {
+      return provider.send(method, params as any[]);
+    },
+  };
+
+  return await Safe.init({
+    provider: eip1193Provider,
+    safeAddress: community.safe_address,
+  });
+}
+
+async function createFundingProposal(
+  communityId: string,
+  description: string,
+  amount: string
+): Promise<string> {
+  const safe = await getSafeInstance(communityId);
+  const safeAddress = await safe.getAddress();
+
+  const safeTransactionData: SafeTransactionDataPartial = {
+    to: safeAddress,
+    data: "0x",
+    value: ethers.utils.parseEther(amount).toString(),
+  };
+
+  const safeTransaction = await safe.createTransaction({
+    transactions: [safeTransactionData],
+  });
+
+  const safeTxHash = await safe.getTransactionHash(safeTransaction);
+
+  // Store the proposal details in the database
+  const { data, error } = await supabase
+    .from("proposals")
+    .insert({
+      community_id: communityId,
+      type: "funding",
+      description,
+      amount,
+      safe_tx_hash: safeTxHash,
+      status: "active",
+    })
+    .select();
+
+  if (error) throw error;
+  return data[0].id;
+}
+
+async function createVotingProposal(
+  communityId: string,
+  description: string,
+  options: string[]
+): Promise<string> {
+  // For voting proposals, we don't need to create a Safe transaction
+  const { data, error } = await supabase
+    .from("proposals")
+    .insert({
+      community_id: communityId,
+      type: "voting",
+      description,
+      options,
+      status: "active",
+    })
+    .select();
+
+  if (error) throw error;
+  return data[0].id;
+}
+
+export async function createProposal(
+  communityId: string,
+  type: "funding" | "voting",
+  description: string,
+  amount?: string,
+  options?: string[]
+): Promise<Proposal> {
+  const votingPeriod = 7 * 24 * 60 * 60; // 7 days in seconds
+  const amountBN = amount
+    ? ethers.utils.parseEther(amount)
+    : ethers.constants.Zero;
+
+  const proposalId = await createProposalOnChain(
+    communityId,
+    description,
+    amountBN,
+    type === "voting" ? options : undefined
+  );
+
+  const now = new Date();
+  const endTime = new Date(now.getTime() + votingPeriod * 1000);
+
+  let proposalData: any = {
+    id: proposalId,
+    community_id: communityId,
+    type,
+    description,
+    status: "active",
+    created_at: now.toISOString(),
+    updated_at: now.toISOString(),
+    voting_end_time: endTime.toISOString(),
+    votes_for: 0,
+    votes_against: 0,
+  };
+
+  if (type === "funding") {
+    proposalData.amount = amountBN.toString();
+  } else {
+    proposalData.options = options;
   }
 
-  const { data: communities, error: communitiesError } = await supabase
-    .from("communities")
+  const { data, error } = await supabase
+    .from("proposals")
+    .insert(proposalData)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Proposal;
+}
+
+export async function getProposals(communityId: string): Promise<Proposal[]> {
+  const { data, error } = await supabase
+    .from("proposals")
     .select("*")
-    .in("id", user.communities);
+    .eq("community_id", communityId);
 
-  if (communitiesError) {
-    console.error("Error fetching communities:", communitiesError);
-    return [];
+  if (error) throw error;
+
+  return data.map((proposal) => ({
+    ...proposal,
+    status:
+      new Date(proposal.voting_end_time) > new Date() ? "active" : "closed",
+    votes: {
+      for: proposal.votes_for,
+      against: proposal.votes_against,
+    },
+  }));
+}
+
+export async function voteOnProposal(
+  proposalId: string,
+  userId: string,
+  support: boolean
+) {
+  await voteOnProposalOnChain(proposalId, support);
+
+  const { data: existingVote, error: existingVoteError } = await supabase
+    .from("votes")
+    .select()
+    .eq("proposal_id", proposalId)
+    .eq("user_id", userId)
+    .single();
+
+  if (existingVoteError && existingVoteError.code !== "PGRST116") {
+    throw existingVoteError;
   }
 
-  return communities;
+  if (existingVote) {
+    throw new Error("User has already voted on this proposal");
+  }
+
+  const { data, error } = await supabase
+    .from("votes")
+    .insert({
+      proposal_id: proposalId,
+      user_id: userId,
+      support,
+    })
+    .select();
+
+  if (error) throw error;
+
+  // Update vote counts in the proposals table
+  const updateColumn = support ? "votes_for" : "votes_against";
+  await supabase.rpc("increment_vote_count", {
+    p_proposal_id: proposalId,
+    p_column: updateColumn,
+  });
+
+  return data[0];
+}
+
+export async function executeFundingProposal(
+  proposalId: string
+): Promise<boolean> {
+  const success = await executeProposalOnChain(proposalId);
+
+  if (success) {
+    await supabase
+      .from("proposals")
+      .update({ status: "executed" })
+      .eq("id", proposalId);
+  }
+
+  return success;
+}
+
+export async function isCommunityMember(
+  communityId: string,
+  userAddress: string
+) {
+  try {
+    return await isCommunityMemberContract(communityId, userAddress);
+  } catch (error) {
+    console.error("Error checking community membership:", error);
+    return false;
+  }
 }
