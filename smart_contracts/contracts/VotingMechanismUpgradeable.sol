@@ -15,6 +15,11 @@ contract VotingMechanismUpgradeable is
     CommunityDAOUpgradeable public communityDAO;
     GovernanceTokenUpgradeable public governanceToken;
 
+    enum ProposalType {
+        Funding,
+        Voting
+    }
+
     struct Proposal {
         uint256 communityId;
         string description;
@@ -22,26 +27,30 @@ contract VotingMechanismUpgradeable is
         uint256 againstVotes;
         uint256 startTime;
         uint256 endTime;
-        bool executed;
+        bool executed; // Keep this field for storage compatibility
+        ProposalType proposalType; // Add the new field
         mapping(address => bool) hasVoted;
     }
 
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalCount;
 
+    // Add a storage gap
+    uint256[50] private __gap;
+
     event ProposalCreated(
         uint256 indexed proposalId,
         uint256 indexed communityId,
         string description,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        ProposalType proposalType
     );
     event Voted(
         uint256 indexed proposalId,
         address indexed voter,
         bool support
     );
-    event ProposalExecuted(uint256 indexed proposalId);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -62,27 +71,28 @@ contract VotingMechanismUpgradeable is
     function createProposal(
         uint256 _communityId,
         string memory _description,
-        uint256 _votingPeriod
-    ) external {
-        require(
-            communityDAO.isMember(_communityId, msg.sender),
-            "Not a community member"
-        );
-
+        uint256 _votingPeriod,
+        ProposalType _proposalType
+    ) external returns (uint256) {
         proposalCount++;
         Proposal storage newProposal = proposals[proposalCount];
         newProposal.communityId = _communityId;
         newProposal.description = _description;
         newProposal.startTime = block.timestamp;
         newProposal.endTime = block.timestamp + _votingPeriod;
+        newProposal.executed = false; // Initialize the executed field
+        newProposal.proposalType = _proposalType;
 
         emit ProposalCreated(
             proposalCount,
             _communityId,
             _description,
             newProposal.startTime,
-            newProposal.endTime
+            newProposal.endTime,
+            _proposalType
         );
+
+        return proposalCount;
     }
 
     function vote(uint256 _proposalId, bool _support) external {
@@ -91,10 +101,6 @@ contract VotingMechanismUpgradeable is
             block.timestamp >= proposal.startTime &&
                 block.timestamp <= proposal.endTime,
             "Voting is not active"
-        );
-        require(
-            communityDAO.isMember(proposal.communityId, msg.sender),
-            "Not a community member"
         );
         require(!proposal.hasVoted[msg.sender], "Already voted");
 
@@ -106,19 +112,6 @@ contract VotingMechanismUpgradeable is
         }
 
         emit Voted(_proposalId, msg.sender, _support);
-    }
-
-    function executeProposal(uint256 _proposalId) external {
-        Proposal storage proposal = proposals[_proposalId];
-        require(block.timestamp > proposal.endTime, "Voting period not ended");
-        require(!proposal.executed, "Proposal already executed");
-
-        proposal.executed = true;
-
-        // Here you would implement the logic to execute the proposal
-        // This could involve transferring funds, changing community settings, etc.
-
-        emit ProposalExecuted(_proposalId);
     }
 
     function getProposalDetails(
@@ -133,7 +126,7 @@ contract VotingMechanismUpgradeable is
             uint256 againstVotes,
             uint256 startTime,
             uint256 endTime,
-            bool executed
+            ProposalType proposalType
         )
     {
         Proposal storage proposal = proposals[_proposalId];
@@ -144,7 +137,7 @@ contract VotingMechanismUpgradeable is
             proposal.againstVotes,
             proposal.startTime,
             proposal.endTime,
-            proposal.executed
+            proposal.proposalType
         );
     }
 

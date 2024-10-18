@@ -186,4 +186,6 @@ contract CommunityDAOUpgradeable is
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+
+    event DebugMemberCheck(uint256 communityId, address member, bool isMember);
 }

@@ -52,94 +52,106 @@ describe("FundManagementUpgradeable", function () {
 
     await governanceToken.transferOwnership(await communityDAO.getAddress());
 
-    // Create a community and add members
-    await communityDAO.createCommunity("Test Community", 0); // 0 for Residential
-    await communityDAO.addMember(1, addr1.address);
+    // Create a community
+    await communityDAO.connect(owner).createCommunity("Test Community", 0); // 0 for Residential
+
+    // Add addr1 as a member
+    await communityDAO.connect(owner).addMember(1, addr1.address);
+
+    // Log membership status for debugging
+    console.log(
+      "Owner is member:",
+      await communityDAO.isMember(1, owner.address)
+    );
+    console.log(
+      "addr1 is member:",
+      await communityDAO.isMember(1, addr1.address)
+    );
+    console.log(
+      "Owner is community admin:",
+      await communityDAO.isCommunityAdmin(1, owner.address)
+    );
   });
 
-  describe("Receiving Funds", function () {
-    it("Should allow community members to send funds", async function () {
+  describe("Creating Funding Proposal", function () {
+    it("Should create a new funding proposal", async function () {
+      const tx = await fundManagement
+        .connect(owner)
+        .createFundingProposal(
+          1,
+          "Test Funding Proposal",
+          ethers.parseEther("1"),
+          86400
+        );
+      const receipt = await tx.wait();
+
+      const event = receipt!.logs.find(
+        (x) =>
+          x.topics[0] ===
+          fundManagement.interface.getEvent("FundingProposalCreated")!.topicHash
+      );
+      const decodedEvent = fundManagement.interface.parseLog({
+        topics: event!.topics as string[],
+        data: event!.data,
+      });
+
+      expect(decodedEvent!.args.proposalId).to.equal(1);
+      expect(decodedEvent!.args.communityId).to.equal(1);
+      expect(decodedEvent!.args.amount).to.equal(ethers.parseEther("1"));
+    });
+  });
+
+  describe("Contributing Funds", function () {
+    beforeEach(async function () {
+      console.log("Before creating funding proposal for contribution:");
+      console.log("Owner address:", owner.address);
+      console.log("Community ID:", 1);
+      console.log(
+        "Is owner member:",
+        await communityDAO.isMember(1, owner.address)
+      );
+      console.log(
+        "Community members:",
+        await communityDAO.getCommunityMembers(1)
+      );
+
+      await fundManagement
+        .connect(owner)
+        .createFundingProposal(
+          1,
+          "Test Funding Proposal",
+          ethers.parseEther("1"),
+          86400
+        );
+    });
+
+    it("Should allow contributing funds to a funding proposal", async function () {
       await expect(
         fundManagement
           .connect(owner)
-          .receiveFunds(1, { value: ethers.parseEther("1") })
+          .contributeFunds(1, { value: ethers.parseEther("0.5") })
       )
         .to.emit(fundManagement, "FundReceived")
-        .withArgs(1, ethers.parseEther("1"));
-
-      expect(await fundManagement.getCommunityBalance(1)).to.equal(
-        ethers.parseEther("1")
-      );
+        .withArgs(1, ethers.parseEther("0.5"));
     });
 
-    it("Should not allow non-members to send funds", async function () {
+    it("Should not allow contributing to non-existent proposals", async function () {
       await expect(
         fundManagement
-          .connect(addr2)
-          .receiveFunds(1, { value: ethers.parseEther("1") })
-      ).to.be.revertedWith("Not a community member");
-    });
-  });
-
-  describe("Initiating Fund Transfer", function () {
-    beforeEach(async function () {
-      await fundManagement
-        .connect(owner)
-        .receiveFunds(1, { value: ethers.parseEther("2") });
-      await votingMechanism
-        .connect(owner)
-        .createProposal(
-          1,
-          `Transfer:${addr2.address}:${ethers.parseEther("1")}`,
-          1
-        );
-      await votingMechanism.connect(owner).vote(1, true);
-      await ethers.provider.send("evm_increaseTime", [2]);
-      await ethers.provider.send("evm_mine", []);
+          .connect(owner)
+          .contributeFunds(2, { value: ethers.parseEther("0.5") })
+      ).to.be.revertedWith("Not a funding proposal");
     });
 
-    it("Should initiate fund transfer for passed proposals", async function () {
-      await expect(fundManagement.initiateFundTransfer(1))
-        .to.emit(fundManagement, "FundTransferInitiated")
-        .withArgs(1, addr2.address, ethers.parseEther("1"));
+    it("Should not allow contributing after the funding period", async function () {
+      await ethers.provider.send("evm_increaseTime", [86401]); // Increase time by more than the voting period
+      await ethers.provider.send("evm_mine", []); // Mine a new block
 
-      expect(await fundManagement.getCommunityBalance(1)).to.equal(
-        ethers.parseEther("1")
-      );
-    });
-
-    it("Should not initiate transfer if proposal didn't pass", async function () {
-      await votingMechanism
-        .connect(owner)
-        .createProposal(
-          1,
-          `Transfer:${addr2.address}:${ethers.parseEther("1")}`,
-          1
-        );
-      await votingMechanism.connect(owner).vote(2, false);
-      await ethers.provider.send("evm_increaseTime", [2]);
-      await ethers.provider.send("evm_mine", []);
-
-      await expect(fundManagement.initiateFundTransfer(2)).to.be.revertedWith(
-        "Proposal did not pass"
-      );
-    });
-
-    it("Should not initiate transfer if insufficient funds", async function () {
-      await votingMechanism
-        .connect(owner)
-        .createProposal(
-          1,
-          `Transfer:${addr2.address}:${ethers.parseEther("3")}`,
-          1
-        );
-      await votingMechanism.connect(owner).vote(2, true);
-      await ethers.provider.send("evm_increaseTime", [2]);
-      await ethers.provider.send("evm_mine", []);
-
-      await expect(fundManagement.initiateFundTransfer(2)).to.be.revertedWith(
-        "Insufficient funds"
-      );
+      await expect(
+        fundManagement
+          .connect(owner)
+          .contributeFunds(1, { value: ethers.parseEther("0.5") })
+      ).to.be.revertedWith("Funding period not active");
     });
   });
 });

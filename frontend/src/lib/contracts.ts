@@ -142,7 +142,7 @@ export async function createProposal(
   amount: ethers.BigNumberish,
   options?: string[]
 ) {
-  if (!votingMechanism || !signer || !fundManagement) {
+  if (!votingMechanism || !signer) {
     throw new Error("Contracts not initialized");
   }
 
@@ -151,16 +151,24 @@ export async function createProposal(
     const amountBN = ethers.BigNumber.from(amount);
     if (amountBN.gt(0)) {
       // Funding proposal
-      tx = await fundManagement.createProposal(
+      console.log("Creating funding proposal with params:", {
         communityId,
         description,
-        amountBN
+        amountBN,
+        options: [],
+      });
+      tx = await votingMechanism.createProposal(
+        communityId,
+        description,
+        amountBN,
+        [] // Empty array for options in funding proposals
       );
     } else {
       // Voting proposal
       tx = await votingMechanism.createProposal(
         communityId,
         description,
+        ethers.constants.Zero, // Zero amount for voting proposals
         options || []
       );
     }

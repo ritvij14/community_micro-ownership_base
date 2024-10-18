@@ -375,7 +375,7 @@ export async function createProposal(
     communityId,
     description,
     amountBN,
-    type === "voting" ? options : undefined
+    type === "voting" ? options : []
   );
 
   const now = new Date();

@@ -871,7 +871,7 @@
             "label": "governanceToken",
             "offset": 0,
             "slot": "2",
-            "type": "t_contract(GovernanceTokenUpgradeable)6700",
+            "type": "t_contract(GovernanceTokenUpgradeable)6158",
             "contract": "CommunityDAOUpgradeable",
             "src": "contracts/CommunityDAOUpgradeable.sol:34"
           }
@@ -953,7 +953,7 @@
             "label": "address[]",
             "numberOfBytes": "32"
           },
-          "t_contract(GovernanceTokenUpgradeable)6700": {
+          "t_contract(GovernanceTokenUpgradeable)6158": {
             "label": "contract GovernanceTokenUpgradeable",
             "numberOfBytes": "20"
           },
@@ -1021,6 +1021,360 @@
               "label": "_roles",
               "type": "t_mapping(t_bytes32,t_struct(RoleData)24_storage)",
               "src": "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:61",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "0c52e78aeca457f2684cd74efc73839f189e8a4a81f1670969117f5eea2daf3f": {
+      "address": "0x0e768a9F5bF86C3a59f4a01D2eE36DF1d8408789",
+      "txHash": "0x1a754a87aadfe481968fc1c3a14a3d37c42b5b0c979ccc5c99eef36c03be40cd",
+      "layout": {
+        "solcVersion": "0.8.20",
+        "storage": [
+          {
+            "label": "communityDAO",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(CommunityDAOUpgradeable)5759",
+            "contract": "FundManagementUpgradeable",
+            "src": "contracts/FundManagementUpgradeable.sol:15"
+          },
+          {
+            "label": "votingMechanism",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_contract(VotingMechanismUpgradeable)6476",
+            "contract": "FundManagementUpgradeable",
+            "src": "contracts/FundManagementUpgradeable.sol:16"
+          },
+          {
+            "label": "communityBalances",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_uint256,t_uint256)",
+            "contract": "FundManagementUpgradeable",
+            "src": "contracts/FundManagementUpgradeable.sol:17"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "FundManagementUpgradeable",
+            "src": "contracts/FundManagementUpgradeable.sol:18"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)211_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)151_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_contract(CommunityDAOUpgradeable)5759": {
+            "label": "contract CommunityDAOUpgradeable",
+            "numberOfBytes": "20"
+          },
+          "t_contract(VotingMechanismUpgradeable)6476": {
+            "label": "contract VotingMechanismUpgradeable",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_uint256,t_uint256)": {
+            "label": "mapping(uint256 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "dec4d10614bd47e890c08db218969f3ba6d34467f67c4d51dd16565388e37fbb": {
+      "address": "0x0b12A0Bdf7e6c6B7525Ca3cfDb662a8F00166e8C",
+      "txHash": "0xdd34691e04e2832b5a8c42349f96fea1be789e427ca75b2c2f6abd0f20777de6",
+      "layout": {
+        "solcVersion": "0.8.20",
+        "storage": [
+          {
+            "label": "communityDAO",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(CommunityDAOUpgradeable)5759",
+            "contract": "VotingMechanismUpgradeable",
+            "src": "contracts/VotingMechanismUpgradeable.sol:15"
+          },
+          {
+            "label": "governanceToken",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_contract(GovernanceTokenUpgradeable)6158",
+            "contract": "VotingMechanismUpgradeable",
+            "src": "contracts/VotingMechanismUpgradeable.sol:16"
+          },
+          {
+            "label": "proposals",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_uint256,t_struct(Proposal)6202_storage)",
+            "contract": "VotingMechanismUpgradeable",
+            "src": "contracts/VotingMechanismUpgradeable.sol:35"
+          },
+          {
+            "label": "proposalCount",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_uint256",
+            "contract": "VotingMechanismUpgradeable",
+            "src": "contracts/VotingMechanismUpgradeable.sol:36"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "VotingMechanismUpgradeable",
+            "src": "contracts/VotingMechanismUpgradeable.sol:39"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)211_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)151_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_contract(CommunityDAOUpgradeable)5759": {
+            "label": "contract CommunityDAOUpgradeable",
+            "numberOfBytes": "20"
+          },
+          "t_contract(GovernanceTokenUpgradeable)6158": {
+            "label": "contract GovernanceTokenUpgradeable",
+            "numberOfBytes": "20"
+          },
+          "t_enum(ProposalType)6180": {
+            "label": "enum VotingMechanismUpgradeable.ProposalType",
+            "members": [
+              "Funding",
+              "Voting"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Proposal)6202_storage)": {
+            "label": "mapping(uint256 => struct VotingMechanismUpgradeable.Proposal)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Proposal)6202_storage": {
+            "label": "struct VotingMechanismUpgradeable.Proposal",
+            "members": [
+              {
+                "label": "communityId",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "description",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "forVotes",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "againstVotes",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "startTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "endTime",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "executed",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "6"
+              },
+              {
+                "label": "proposalType",
+                "type": "t_enum(ProposalType)6180",
+                "offset": 1,
+                "slot": "6"
+              },
+              {
+                "label": "hasVoted",
+                "type": "t_mapping(t_address,t_bool)",
+                "offset": 0,
+                "slot": "7"
+              }
+            ],
+            "numberOfBytes": "256"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
               "offset": 0,
               "slot": "0"
             }

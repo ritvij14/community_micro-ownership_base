@@ -61,11 +61,14 @@ export default function CommunityProposals({
     if (!user || !isMember) return;
 
     try {
-      if (
-        newProposal.type === "funding" &&
-        !ethers.utils.isAddress(newProposal.amount)
-      ) {
-        throw new Error("Invalid amount for funding proposal");
+      if (newProposal.type === "funding") {
+        const amount = parseFloat(newProposal.amount);
+        const MAX_AMOUNT = 1000000; // Set this to whatever maximum amount makes sense for your application
+        if (isNaN(amount) || amount <= 0 || amount > MAX_AMOUNT) {
+          throw new Error(
+            `Invalid amount for funding proposal. Please enter a positive number not exceeding ${MAX_AMOUNT}.`
+          );
+        }
       }
 
       if (

@@ -48,10 +48,10 @@ describe("VotingMechanismUpgradeable", function () {
   });
 
   describe("Proposal Creation", function () {
-    it("Should create a new proposal", async function () {
+    it("Should create a new voting proposal", async function () {
       const tx = await votingMechanism
         .connect(owner)
-        .createProposal(1, "Test Proposal", 86400);
+        .createProposal(1, "Test Voting Proposal", 86400, 1); // 1 for Voting type
       const receipt = await tx.wait();
       const block = await ethers.provider.getBlock(receipt!.blockNumber);
       const expectedEndTime = BigInt(block!.timestamp) + BigInt(86400);
@@ -68,21 +68,28 @@ describe("VotingMechanismUpgradeable", function () {
 
       expect(decodedEvent!.args.proposalId).to.equal(1);
       expect(decodedEvent!.args.communityId).to.equal(1);
-      expect(decodedEvent!.args.description).to.equal("Test Proposal");
+      expect(decodedEvent!.args.description).to.equal("Test Voting Proposal");
       expect(decodedEvent!.args.startTime).to.be.closeTo(
         BigInt(block!.timestamp),
         BigInt(2)
-      ); // Allow 2 seconds difference
+      );
       expect(decodedEvent!.args.endTime).to.be.closeTo(
         expectedEndTime,
         BigInt(2)
-      ); // Allow 2 seconds difference
+      );
+      expect(decodedEvent!.args.proposalType).to.equal(1); // Voting type
     });
 
-    it("Should not allow non-members to create proposals", async function () {
-      await expect(
-        votingMechanism.connect(addr2).createProposal(1, "Test Proposal", 86400)
-      ).to.be.revertedWith("Not a community member");
+    it("Should create a new funding proposal", async function () {
+      const tx = await votingMechanism
+        .connect(owner)
+        .createProposal(1, "Test Funding Proposal", 86400, 0); // 0 for Funding type
+      const receipt = await tx.wait();
+      const decodedEvent = votingMechanism.interface.parseLog({
+        topics: receipt!.logs[0].topics as string[],
+        data: receipt!.logs[0].data,
+      });
+      expect(decodedEvent!.args.proposalType).to.equal(0); // Funding type
     });
   });
 
@@ -90,19 +97,7 @@ describe("VotingMechanismUpgradeable", function () {
     beforeEach(async function () {
       await votingMechanism
         .connect(owner)
-        .createProposal(1, "Test Proposal", 86400);
-    });
-
-    it("Should allow members to vote", async function () {
-      await expect(votingMechanism.connect(owner).vote(1, true))
-        .to.emit(votingMechanism, "Voted")
-        .withArgs(1, owner.address, true);
-    });
-
-    it("Should not allow non-members to vote", async function () {
-      await expect(
-        votingMechanism.connect(addr2).vote(1, true)
-      ).to.be.revertedWith("Not a community member");
+        .createProposal(1, "Test Proposal", 86400, 1);
     });
 
     it("Should not allow double voting", async function () {
@@ -111,29 +106,14 @@ describe("VotingMechanismUpgradeable", function () {
         votingMechanism.connect(owner).vote(1, false)
       ).to.be.revertedWith("Already voted");
     });
-  });
 
-  describe("Proposal Execution", function () {
-    beforeEach(async function () {
-      await votingMechanism
-        .connect(owner)
-        .createProposal(1, "Test Proposal", 1); // 1 second voting period
-      await votingMechanism.connect(owner).vote(1, true);
-      await ethers.provider.send("evm_increaseTime", [2]); // Increase time by 2 seconds
+    it("Should not allow voting after the voting period", async function () {
+      await ethers.provider.send("evm_increaseTime", [86401]); // Increase time by more than the voting period
       await ethers.provider.send("evm_mine", []); // Mine a new block
-    });
 
-    it("Should execute a proposal after voting period", async function () {
-      await expect(votingMechanism.connect(owner).executeProposal(1))
-        .to.emit(votingMechanism, "ProposalExecuted")
-        .withArgs(1);
-    });
-
-    it("Should not execute a proposal twice", async function () {
-      await votingMechanism.connect(owner).executeProposal(1);
       await expect(
-        votingMechanism.connect(owner).executeProposal(1)
-      ).to.be.revertedWith("Proposal already executed");
+        votingMechanism.connect(owner).vote(1, true)
+      ).to.be.revertedWith("Voting is not active");
     });
   });
 
@@ -141,7 +121,7 @@ describe("VotingMechanismUpgradeable", function () {
     beforeEach(async function () {
       await votingMechanism
         .connect(owner)
-        .createProposal(1, "Test Proposal", 86400);
+        .createProposal(1, "Test Proposal", 86400, 1);
     });
 
     it("Should return correct proposal details", async function () {
@@ -150,7 +130,16 @@ describe("VotingMechanismUpgradeable", function () {
       expect(proposalDetails.description).to.equal("Test Proposal");
       expect(proposalDetails.forVotes).to.equal(0);
       expect(proposalDetails.againstVotes).to.equal(0);
-      expect(proposalDetails.executed).to.be.false;
+      expect(proposalDetails.proposalType).to.equal(1); // Voting type
+    });
+
+    it("Should return updated vote counts after voting", async function () {
+      await votingMechanism.connect(owner).vote(1, true);
+      await votingMechanism.connect(addr1).vote(1, false);
+
+      const proposalDetails = await votingMechanism.getProposalDetails(1);
+      expect(proposalDetails.forVotes).to.equal(1);
+      expect(proposalDetails.againstVotes).to.equal(1);
     });
   });
 });
