@@ -2,11 +2,6 @@ import { PrivyClientConfig } from "@privy-io/react-auth";
 
 export const privyConfig: PrivyClientConfig = {
   loginMethods: ["google"],
-  fundingMethodConfig: {
-    moonpay: {
-      useSandbox: true,
-    },
-  },
   appearance: {
     theme: "light",
     accentColor: "#676FFF",
@@ -56,4 +51,10 @@ export const privyConfig: PrivyClientConfig = {
       testnet: true,
     },
   ],
+  // Add these new configurations
+  embeddedWallets: {
+    createOnLogin: "users-without-wallets",
+    noPromptOnSignature: true,
+  },
+  walletConnectCloudProjectId: undefined,
 };

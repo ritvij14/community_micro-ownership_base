@@ -1,12 +1,13 @@
+import PrivyProviderWrapper from "@/components/PrivyProviderWrapper";
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata = {
-  title: "Fractional Ownership Platform",
-  description: "Join local communities through tokenized memberships",
+export const metadata: Metadata = {
+  title: "Community DAO",
+  description: "A platform for community governance",
 };
 
 export default function RootLayout({
@@ -16,10 +17,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <Providers>
-          <main className="min-h-screen bg-white text-black">{children}</main>
-        </Providers>
+      <body className={inter.className + " bg-white text-black"}>
+        <PrivyProviderWrapper>{children}</PrivyProviderWrapper>
       </body>
     </html>
   );

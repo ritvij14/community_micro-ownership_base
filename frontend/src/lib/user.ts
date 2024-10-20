@@ -2,13 +2,17 @@ import Safe, { Eip1193Provider } from "@safe-global/protocol-kit";
 import { SafeTransactionDataPartial } from "@safe-global/safe-core-sdk-types";
 import { ethers } from "ethers";
 import {
+  contributeFundsToProposal,
+  convertUSDtoETH,
   createCommunityOnChain,
-  createProposal as createProposalOnChain,
+  createFundingProposalOnChain,
+  createVotingProposalOnChain,
   executeProposal as executeProposalOnChain,
   isCommunityMember as isCommunityMemberContract,
   mintMembershipNFT,
   voteOnProposal as voteOnProposalOnChain,
 } from "./contracts";
+import { createSafeWallet } from "./safeWallet";
 import { supabase } from "./supabase";
 
 interface User {
@@ -28,12 +32,14 @@ interface Proposal {
   community_id: string;
   type: "funding" | "voting";
   description: string;
-  amount?: string;
-  options?: string[];
-  safe_tx_hash?: string;
+  amount?: string; // This will now be in USD
+  amount_received?: string; // New field for tracking received funds in USD
   status: "active" | "executed";
-  created_at: string;
-  updated_at: string;
+  votes?: {
+    for: string;
+    against: string;
+    voters: { name: string; support: boolean; userId: string }[];
+  };
 }
 
 export async function createOrUpdateUser(
@@ -98,7 +104,8 @@ export async function createCommunity(
   name: string,
   description: string,
   type: "residential" | "commercial",
-  creatorId: string
+  creatorId: string,
+  creatorWalletAddress: string
 ) {
   // Check if a community with the same name already exists
   const { data: existingCommunity, error: checkError } = await supabase
@@ -119,6 +126,9 @@ export async function createCommunity(
     // Create community on-chain
     const communityId = await createCommunityOnChain(name, description, type);
 
+    // Create a Safe wallet for the community using the creator's wallet address
+    const safeWalletAddress = await createSafeWallet([creatorWalletAddress], 1);
+
     // If on-chain operation is successful, update the database
     const { data, error } = await supabase
       .from("communities")
@@ -128,7 +138,8 @@ export async function createCommunity(
         description,
         type,
         member_ids: [creatorId],
-        admin_id: creatorId,
+        admin: creatorId,
+        safe_wallet_address: safeWalletAddress,
       })
       .select();
 
@@ -169,7 +180,6 @@ export async function getCommunity(communityId: string) {
   }
 
   let admin = null;
-  console.log("community", community);
   if (community.admin) {
     // Fetch admin details
     const { data: adminData, error: adminError } = await supabase
@@ -182,6 +192,8 @@ export async function getCommunity(communityId: string) {
       console.error("Error fetching admin details:", adminError);
       // Don't throw the error, just log it
     } else {
+      console.log("admin", adminData);
+
       admin = adminData;
     }
   }
@@ -252,23 +264,42 @@ export async function leaveCommunity(userId: string, communityId: string) {
 
 export async function getUserCommunities(userId: string) {
   try {
-    // First, fetch all communities
-    const { data: allCommunities, error: communitiesError } = await supabase
+    // First, fetch all communities where the user is a member
+    const { data: userCommunities, error: communitiesError } = await supabase
       .from("communities")
-      .select("*");
+      .select("*")
+      .contains("member_ids", [userId]);
 
     if (communitiesError) {
       console.error("Error fetching communities:", communitiesError);
       return [];
     }
 
-    // Filter communities where the user is a member
-    const userCommunities = allCommunities.filter(
-      (community) =>
-        community.member_ids && community.member_ids.includes(userId)
+    // Fetch admin details for each community
+    const communitiesWithAdmins = await Promise.all(
+      userCommunities.map(async (community) => {
+        if (community.admin) {
+          const { data: adminData, error: adminError } = await supabase
+            .from("users")
+            .select("id, display_name, email")
+            .eq("id", community.admin)
+            .single();
+
+          if (adminError) {
+            console.error(
+              `Error fetching admin for community ${community.id}:`,
+              adminError
+            );
+            return { ...community, admin: null };
+          }
+
+          return { ...community, admin: adminData };
+        }
+        return { ...community, admin: null };
+      })
     );
 
-    return userCommunities;
+    return communitiesWithAdmins;
   } catch (error) {
     console.error("Error in getUserCommunities:", error);
     return [];
@@ -360,29 +391,56 @@ async function createVotingProposal(
 }
 
 export async function createProposal(
+  userId: string,
   communityId: string,
   type: "funding" | "voting",
   description: string,
-  amount?: string,
-  options?: string[]
+  votingPeriod: string,
+  proposalType: number,
+  amount?: number // This is now in USD
 ): Promise<Proposal> {
-  const votingPeriod = 7 * 24 * 60 * 60; // 7 days in seconds
-  const amountBN = amount
-    ? ethers.utils.parseEther(amount)
-    : ethers.constants.Zero;
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
 
-  const proposalId = await createProposalOnChain(
-    communityId,
-    description,
-    amountBN,
-    type === "voting" ? options : []
-  );
+  // Check if the user is a member of the community
+  const user = await getUserProfile(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const isMember = await isCommunityMember(communityId, user.wallet_address!);
+  if (!isMember) {
+    throw new Error(
+      "You must be a member of the community to create a proposal"
+    );
+  }
+  let proposalId;
+  if (type === "funding") {
+    // Convert USD to ETH
+    const ethAmount = await convertUSDtoETH(amount ?? 0);
+    proposalId = await createFundingProposalOnChain(
+      communityId,
+      description,
+      ethAmount,
+      votingPeriod
+    );
+  } else {
+    proposalId = await createVotingProposalOnChain(
+      communityId,
+      description,
+      votingPeriod,
+      proposalType
+    );
+  }
 
   const now = new Date();
-  const endTime = new Date(now.getTime() + votingPeriod * 1000);
+  const endTime = new Date(now.getTime() + parseInt(votingPeriod) * 1000);
 
   let proposalData: any = {
-    id: proposalId,
+    id: ethers.BigNumber.isBigNumber(proposalId)
+      ? proposalId.toNumber()
+      : proposalId,
     community_id: communityId,
     type,
     description,
@@ -392,13 +450,9 @@ export async function createProposal(
     voting_end_time: endTime.toISOString(),
     votes_for: 0,
     votes_against: 0,
+    amount: amount ? amount.toString() : undefined, // Store USD amount
+    amount_received: "0", // Initialize amount_received to 0
   };
-
-  if (type === "funding") {
-    proposalData.amount = amountBN.toString();
-  } else {
-    proposalData.options = options;
-  }
 
   const { data, error } = await supabase
     .from("proposals")
@@ -411,22 +465,52 @@ export async function createProposal(
 }
 
 export async function getProposals(communityId: string): Promise<Proposal[]> {
-  const { data, error } = await supabase
-    .from("proposals")
-    .select("*")
-    .eq("community_id", communityId);
+  try {
+    const { data, error } = await supabase
+      .from("proposals")
+      .select(
+        `
+        *,
+        votes (
+          user_id,
+          support,
+          users (
+            id,
+            display_name,
+            email
+          )
+        )
+      `
+      )
+      .eq("community_id", communityId);
 
-  if (error) throw error;
+    if (error) throw error;
 
-  return data.map((proposal) => ({
-    ...proposal,
-    status:
-      new Date(proposal.voting_end_time) > new Date() ? "active" : "closed",
-    votes: {
-      for: proposal.votes_for,
-      against: proposal.votes_against,
-    },
-  }));
+    return data.map((proposal) => ({
+      ...proposal,
+      status:
+        new Date(proposal.voting_end_time) > new Date() ? "active" : "closed",
+      votes: {
+        for:
+          proposal.votes?.filter((v: any) => v.support).length.toString() ||
+          "0",
+        against:
+          proposal.votes?.filter((v: any) => !v.support).length.toString() ||
+          "0",
+        voters:
+          proposal.votes?.map((v: any) => ({
+            name: v.users?.display_name || v.users?.email || "Unknown User",
+            support: v.support,
+            userId: v.user_id,
+          })) || [],
+      },
+      amount: proposal.amount, // This is now in USD
+      amount_received: proposal.amount_received || "0", // Ensure this is included
+    }));
+  } catch (error) {
+    console.error("Error fetching proposals:", error);
+    return [];
+  }
 }
 
 export async function voteOnProposal(
@@ -496,5 +580,155 @@ export async function isCommunityMember(
   } catch (error) {
     console.error("Error checking community membership:", error);
     return false;
+  }
+}
+
+export async function contributeFunds(proposalId: string, amountUSD: number) {
+  try {
+    // First, get the proposal and community details
+    const { data: proposal, error: proposalError } = await supabase
+      .from("proposals")
+      .select("id, community_id, amount_received")
+      .eq("id", proposalId)
+      .single();
+
+    if (proposalError) throw proposalError;
+    if (!proposal) throw new Error("Proposal not found");
+
+    // Get the community's safe wallet address
+    const { data: community, error: communityError } = await supabase
+      .from("communities")
+      .select("safe_wallet_address")
+      .eq("id", proposal.community_id)
+      .single();
+
+    if (communityError) throw communityError;
+    if (!community || !community.safe_wallet_address) {
+      throw new Error("Community safe wallet address not found");
+    }
+
+    // Call the contributeFundsToProposal function
+    const txHash = await contributeFundsToProposal(
+      proposal.community_id,
+      community.safe_wallet_address,
+      amountUSD
+    );
+
+    if (txHash) {
+      // Update the proposal's amount_received in the database
+      const newAmountReceived = parseFloat(proposal.amount_received || "0") + amountUSD;
+      const { error: updateError } = await supabase
+        .from("proposals")
+        .update({ amount_received: newAmountReceived.toString() })
+        .eq("id", proposalId);
+
+      if (updateError) throw updateError;
+
+      console.log("Funds contributed and database updated successfully");
+      return txHash;
+    } else {
+      throw new Error("Transaction failed");
+    }
+  } catch (error) {
+    console.error("Error contributing funds:", error);
+    throw error;
+  }
+}
+
+export async function getAllCommunitiesWithAdmins() {
+  try {
+    // Fetch all communities
+    const { data: communities, error: communitiesError } = await supabase
+      .from("communities")
+      .select("*");
+
+    if (communitiesError) {
+      console.error("Error fetching communities:", communitiesError);
+      return [];
+    }
+
+    // Fetch admin details for each community
+    const communitiesWithAdmins = await Promise.all(
+      communities.map(async (community) => {
+        if (community.admin) {
+          const { data: adminData, error: adminError } = await supabase
+            .from("users")
+            .select("id, display_name, email")
+            .eq("id", community.admin)
+            .single();
+
+          if (adminError) {
+            console.error(
+              `Error fetching admin for community ${community.id}:`,
+              adminError
+            );
+            return { ...community, admin: null };
+          }
+
+          return { ...community, admin: adminData };
+        }
+        return { ...community, admin: null };
+      })
+    );
+
+    return communitiesWithAdmins;
+  } catch (error) {
+    console.error("Error in getAllCommunitiesWithAdmins:", error);
+    return [];
+  }
+}
+
+// Add this new function
+export async function getUserByWalletAddress(
+  walletAddress: string
+): Promise<User | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("wallet_address", walletAddress)
+    .single();
+
+  if (error) {
+    console.error("Error fetching user by wallet address:", error);
+    return null;
+  }
+
+  return data as User;
+}
+
+// Update the updateCommunityMembers function to accept user IDs
+export async function updateCommunityMembers(
+  communityId: string,
+  memberIds: string[]
+) {
+  const { data, error } = await supabase
+    .from("communities")
+    .update({ member_ids: memberIds })
+    .eq("id", communityId);
+
+  if (error) {
+    console.error("Error updating community members:", error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateUserWalletAddress(
+  userId: string,
+  walletAddress: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("users")
+      .update({ wallet_address: walletAddress })
+      .eq("id", userId);
+
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error updating wallet address:", error);
+    throw error;
   }
 }

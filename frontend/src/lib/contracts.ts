@@ -8,10 +8,10 @@ import {
   transferFunds as safeTransferFunds,
 } from "./safeWallet";
 
-const GovernanceTokenAddress = "0xaF7dE49f0FC1F540307269a4C2846fd472b2f1F7";
+const GovernanceTokenAddress = "0x2D250e173172F0C67763bb70ed4a2C59273856a2";
 const CommunityDAOAddress = "0x86D6AaCDe1a30D634Ff7A41Acab3540ed62430A7";
-const VotingMechanismAddress = "0xb2049388033F6dC5C6e92eD4A54c856a69C92A9A";
-const FundManagementAddress = "0xb14c42317A9c90Bd6735D3B0d21403A4d2957b57";
+const VotingMechanismAddress = "0xA7637215687454dA2715905a651B423113d82971";
+const FundManagementAddress = "0x8206E238b2dE3711A005518a0addF9c9e2cf4426";
 
 const BASE_SEPOLIA_RPC_URL = "https://sepolia.base.org";
 
@@ -136,50 +136,66 @@ export async function createCommunityOnChain(
   }
 }
 
-export async function createProposal(
+export async function createVotingProposalOnChain(
   communityId: string,
   description: string,
-  amount: ethers.BigNumberish,
-  options?: string[]
-) {
+  votingPeriod: string,
+  proposalType: number
+): Promise<string> {
   if (!votingMechanism || !signer) {
     throw new Error("Contracts not initialized");
   }
 
   try {
-    let tx;
-    const amountBN = ethers.BigNumber.from(amount);
-    if (amountBN.gt(0)) {
-      // Funding proposal
-      console.log("Creating funding proposal with params:", {
-        communityId,
-        description,
-        amountBN,
-        options: [],
-      });
-      tx = await votingMechanism.createProposal(
-        communityId,
-        description,
-        amountBN,
-        [] // Empty array for options in funding proposals
-      );
-    } else {
-      // Voting proposal
-      tx = await votingMechanism.createProposal(
-        communityId,
-        description,
-        ethers.constants.Zero, // Zero amount for voting proposals
-        options || []
-      );
+    // Convert communityId to BigNumber
+    const communityIdBN = ethers.BigNumber.from(communityId);
+    const proposalTypeBN = ethers.BigNumber.from(proposalType);
+
+    // Use a fixed gas limit instead of estimating
+    const gasLimit = 500000; // Adjust this value if needed
+
+    // Check if the user is a member of the community
+    const isMember = await communityDAO.isMember(
+      communityIdBN,
+      await signer.getAddress()
+    );
+    console.log("Is user a member of the community?", isMember);
+
+    if (!isMember) {
+      throw new Error("User is not a member of the community");
     }
+
+    console.log("Creating proposal with params:", {
+      communityIdBN,
+      description,
+      votingPeriod: ethers.BigNumber.from(votingPeriod),
+      proposalTypeBN,
+    });
+
+    const tx = await votingMechanism.createProposal(
+      communityIdBN,
+      description,
+      ethers.BigNumber.from(votingPeriod),
+      proposalTypeBN,
+      { gasLimit }
+    );
+    console.log("Transaction sent:", tx.hash);
+
     const receipt = await tx.wait();
+    console.log("Transaction mined:", receipt.transactionHash);
+
     const event = receipt.events.find(
       (e: any) => e.event === "ProposalCreated"
     );
-    return event.args.proposalId.toString();
-  } catch (error) {
-    console.error("Error creating proposal:", error);
-    throw error;
+    if (!event) {
+      throw new Error("ProposalCreated event not found in transaction receipt");
+    }
+
+    const proposalId = event.args.proposalId.toString();
+    return proposalId;
+  } catch (error: any) {
+    console.error("Detailed error in createProposal:", error);
+    return "";
   }
 }
 
@@ -189,7 +205,10 @@ export async function voteOnProposal(proposalId: string, support: boolean) {
   }
 
   try {
-    const tx = await votingMechanism.vote(proposalId, support);
+    const tx = await votingMechanism.vote(
+      ethers.BigNumber.from(proposalId),
+      support
+    );
     await tx.wait();
   } catch (error) {
     console.error("Error voting on proposal:", error);
@@ -203,7 +222,7 @@ export async function executeProposal(proposalId: string) {
   }
 
   try {
-    const tx = await fundManagement.executeProposal(proposalId);
+    const tx = await fundManagement.contributeFunds(proposalId);
     await tx.wait();
     return true;
   } catch (error) {
@@ -288,6 +307,10 @@ export async function isCommunityMember(
   communityId: string,
   userAddress: string
 ) {
+  if (!communityDAO) {
+    throw new Error("Contracts not initialized");
+  }
+
   try {
     return await communityDAO.isMember(communityId, userAddress);
   } catch (error) {
@@ -332,54 +355,30 @@ export async function addMember(
   }
 }
 
-export async function createFundingProposal(
+export async function createFundingProposalOnChain(
   communityId: string,
   description: string,
-  amount: ethers.BigNumberish
+  amount: ethers.BigNumber,
+  votingPeriod: string
 ) {
   if (!fundManagement || !signer) {
     throw new Error("Contracts not initialized");
   }
 
   try {
-    const tx = await fundManagement.createProposal(
-      communityId,
+    const tx = await fundManagement.createFundingProposal(
+      ethers.BigNumber.from(communityId),
       description,
-      amount
+      amount,
+      ethers.BigNumber.from(votingPeriod)
     );
     const receipt = await tx.wait();
     const proposalId = receipt.events.find(
-      (e: any) => e.event === "ProposalCreated"
+      (e: any) => e.event === "FundingProposalCreated"
     ).args.proposalId;
     return proposalId;
   } catch (error) {
     console.error("Error creating funding proposal:", error);
-    throw error;
-  }
-}
-
-export async function createVotingProposal(
-  communityId: string,
-  description: string,
-  options: string[]
-) {
-  if (!votingMechanism || !signer) {
-    throw new Error("Contracts not initialized");
-  }
-
-  try {
-    const tx = await votingMechanism.createProposal(
-      communityId,
-      description,
-      options
-    );
-    const receipt = await tx.wait();
-    const proposalId = receipt.events.find(
-      (e: any) => e.event === "ProposalCreated"
-    ).args.proposalId;
-    return proposalId;
-  } catch (error) {
-    console.error("Error creating voting proposal:", error);
     throw error;
   }
 }
@@ -432,6 +431,46 @@ export async function executeFundingProposal(proposalId: string) {
     console.log("Funding proposal executed successfully");
   } catch (error) {
     console.error("Error executing funding proposal:", error);
+    throw error;
+  }
+}
+
+export async function convertUSDtoETH(
+  usdAmount: number
+): Promise<ethers.BigNumber> {
+  // You'll need to implement or use an oracle service to get the current exchange rate
+  // For this example, we'll use a mock rate of 1 USD = 0.0005 ETH
+  const mockRate = 0.0005;
+  const ethAmount = usdAmount * mockRate;
+  return ethers.utils.parseEther(ethAmount.toFixed(18));
+}
+
+export async function contributeFundsToProposal(
+  communityId: string,
+  safeWalletAddress: string,
+  amountUSD: number
+) {
+  if (!signer) {
+    throw new Error("Signer not initialized");
+  }
+
+  try {
+    // Convert USD to ETH
+    const ethAmount = await convertUSDtoETH(amountUSD);
+
+    // Send funds directly from the user's wallet to the Safe wallet
+    const tx = await signer.sendTransaction({
+      to: safeWalletAddress,
+      value: ethAmount,
+    });
+
+    // Wait for the transaction to be mined
+    const receipt = await tx.wait();
+
+    console.log("Funds contributed successfully", receipt.transactionHash);
+    return receipt.transactionHash;
+  } catch (error) {
+    console.error("Error contributing funds:", error);
     throw error;
   }
 }

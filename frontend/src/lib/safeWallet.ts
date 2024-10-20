@@ -1,3 +1,4 @@
+import { EIP1193Provider } from "@privy-io/react-auth";
 import Safe, {
   SafeAccountConfig,
   SafeFactory,
@@ -13,7 +14,10 @@ let safeService: SafeServiceClient;
 let ethAdapter: EthersAdapter;
 let safeSdk: Safe;
 
-export async function initializeSafeSDK(signer: ethers.Signer) {
+export async function initializeSafeSDK(provider: EIP1193Provider) {
+  const ethersProvider = new ethers.providers.Web3Provider(provider);
+  const signer = ethersProvider.getSigner();
+
   ethAdapter = new EthersAdapter({
     ethers,
     signerOrProvider: signer,
@@ -72,4 +76,28 @@ export async function transferFunds(
   await executeTxResponse.transactionResponse?.wait();
 
   return executeTxResponse.hash;
+}
+
+export async function getSafeWalletBalance(
+  safeAddress: string,
+  provider: EIP1193Provider
+): Promise<string> {
+  try {
+    if (!ethAdapter) {
+      throw new Error("Safe SDK not initialized");
+    }
+
+    const ethersProvider = new ethers.providers.Web3Provider(provider);
+    const balance = await ethersProvider.getBalance(safeAddress);
+    const ethBalance = ethers.utils.formatEther(balance);
+
+    // Mock exchange rate: 1 ETH = $2000 USD
+    const mockExchangeRate = 2000;
+    const usdBalance = parseFloat(ethBalance) * mockExchangeRate;
+
+    return usdBalance.toFixed(2);
+  } catch (error) {
+    console.error("Error fetching Safe wallet balance:", error);
+    throw error;
+  }
 }

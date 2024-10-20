@@ -1,13 +1,14 @@
 "use client";
 
 import { initializeContracts } from "@/lib/contracts";
+import { initializeSafeSDK } from "@/lib/safeWallet";
 import {
   createCommunity,
   createOrUpdateUser,
   getUserCommunities,
   updateUserCommunities,
 } from "@/lib/user";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "react-feather"; // Make sure to install react-feather or use any other icon library
@@ -24,31 +25,32 @@ export default function Onboarding() {
     type: "residential",
   });
   const router = useRouter();
-  const { user, ready, authenticated, getAccessToken, getEthereumProvider } =
-    usePrivy();
+  const { user, ready, authenticated, getAccessToken } = usePrivy();
+  const { wallets } = useWallets();
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    async function initContracts() {
-      if (authenticated && user?.wallet) {
+    async function initSDKs() {
+      if (authenticated && wallets.length > 0) {
         try {
-          const provider = await getEthereumProvider();
+          const provider = await wallets[0].getEthereumProvider();
           if (!provider) {
             throw new Error("Failed to get Ethereum provider");
           }
           await initializeContracts(provider);
-          console.log("Contracts initialized successfully");
+          await initializeSafeSDK(provider);
+          console.log("Contracts and Safe SDK initialized successfully");
         } catch (error) {
-          console.error("Failed to initialize contracts:", error);
+          console.error("Failed to initialize SDKs:", error);
           setError(
-            "Failed to initialize contracts. Please ensure you're connected to Base Sepolia network and try again."
+            "Failed to initialize. Please ensure you're connected to Base Sepolia network and try again."
           );
         }
       }
     }
-    initContracts();
-  }, [authenticated, user, getEthereumProvider]);
+    initSDKs();
+  }, [authenticated, wallets]);
 
   useEffect(() => {
     async function fetchCommunities() {
@@ -66,51 +68,46 @@ export default function Onboarding() {
   }, [user?.id]);
 
   const handleFinish = async () => {
-    if (isCreating) return; // Prevent multiple clicks
+    if (isCreating) return;
     setIsCreating(true);
     try {
-      if (user?.id && authenticated) {
-        try {
-          setError(null);
-          const token = await getAccessToken();
-          const walletAddress = user?.wallet?.address;
+      if (user?.id && authenticated && wallets.length > 0) {
+        setError(null);
+        const token = await getAccessToken();
+        const walletAddress = wallets[0].address;
 
-          await createOrUpdateUser(
-            user.id,
-            user.email?.address || user?.google?.email || "",
-            displayName || user?.google?.name || "",
-            bio,
-            walletAddress
-          );
+        await createOrUpdateUser(
+          user.id,
+          user.email?.address || user?.google?.email || "",
+          displayName || user?.google?.name || "",
+          bio,
+          walletAddress
+        );
 
-          if (choice === "create") {
-            console.log("Creating community:", newCommunity);
-            const provider = await getEthereumProvider();
-            if (!provider) {
-              throw new Error("Failed to get Ethereum provider");
-            }
-            await initializeContracts(provider); // Ensure contracts are initialized
-            const newCommunityData = await createCommunity(
-              newCommunity.name,
-              newCommunity.description,
-              newCommunity.type as "residential" | "commercial",
-              user.id
-            );
-            console.log("Community created:", newCommunityData);
-          } else if (choice === "join" && selectedCommunities.length > 0) {
-            await updateUserCommunities(user.id, selectedCommunities);
+        if (choice === "create") {
+          console.log("Creating community:", newCommunity);
+          const provider = await wallets[0].getEthereumProvider();
+          if (!provider) {
+            throw new Error("Failed to get Ethereum provider");
           }
-
-          router.push("/dashboard");
-        } catch (error) {
-          console.error("Detailed error in handleFinish:", error);
-          setError(
-            error instanceof Error ? error.message : JSON.stringify(error)
+          await initializeContracts(provider);
+          await initializeSafeSDK(provider);
+          const newCommunityData = await createCommunity(
+            newCommunity.name,
+            newCommunity.description,
+            newCommunity.type as "residential" | "commercial",
+            user.id,
+            walletAddress // Pass the wallet address here
           );
+          console.log("Community created:", newCommunityData);
+        } else if (choice === "join" && selectedCommunities.length > 0) {
+          await updateUserCommunities(user.id, selectedCommunities);
         }
+
+        router.push("/dashboard");
       }
     } catch (error) {
-      console.error("Error creating community:", error);
+      console.error("Error in handleFinish:", error);
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsCreating(false);
@@ -210,23 +207,6 @@ export default function Onboarding() {
       );
     }
     return null;
-  };
-
-  const retryInitialization = async () => {
-    setError(null);
-    try {
-      const provider = await getEthereumProvider();
-      if (!provider) {
-        throw new Error("Failed to get Ethereum provider");
-      }
-      await initializeContracts(provider);
-      console.log("Contracts initialized successfully");
-    } catch (error) {
-      console.error("Failed to initialize contracts:", error);
-      setError(
-        "Failed to initialize contracts. Please ensure you're connected to Base Sepolia network and try again."
-      );
-    }
   };
 
   return (

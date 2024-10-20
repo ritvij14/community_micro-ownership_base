@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  contributeFunds,
   createProposal,
   executeFundingProposal,
   getProposals,
@@ -8,19 +9,20 @@ import {
   voteOnProposal,
 } from "@/lib/user";
 import { usePrivy } from "@privy-io/react-auth";
-import { ethers } from "ethers";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface Proposal {
   id: string;
   type: "funding" | "voting";
   description: string;
-  amount?: string;
-  options?: string[];
+  amount?: string; // This is now in USD
+  amount_received?: string; // New field for tracking received funds in USD
   status: "active" | "executed";
   votes?: {
     for: string;
     against: string;
+    voters: { name: string; support: boolean; userId: string }[];
   };
 }
 
@@ -30,6 +32,7 @@ export default function CommunityProposals({
   params: { id: string };
 }) {
   const { user } = usePrivy();
+  const router = useRouter();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -37,9 +40,9 @@ export default function CommunityProposals({
     type: "funding",
     description: "",
     amount: "",
-    options: ["", ""],
   });
   const [isMember, setIsMember] = useState(false);
+  const [contributionAmount, setContributionAmount] = useState("");
 
   useEffect(() => {
     async function initialize() {
@@ -57,6 +60,14 @@ export default function CommunityProposals({
     initialize();
   }, [params.id, user]);
 
+  function getUserVote(proposal: Proposal) {
+    if (!user || !proposal.votes) return null;
+    const userVote = proposal.votes.voters.find(
+      (voter) => voter.userId === user.id
+    );
+    return userVote ? (userVote.support ? "For" : "Against") : null;
+  }
+
   async function handleCreateProposal() {
     if (!user || !isMember) return;
 
@@ -66,34 +77,38 @@ export default function CommunityProposals({
         const MAX_AMOUNT = 1000000; // Set this to whatever maximum amount makes sense for your application
         if (isNaN(amount) || amount <= 0 || amount > MAX_AMOUNT) {
           throw new Error(
-            `Invalid amount for funding proposal. Please enter a positive number not exceeding ${MAX_AMOUNT}.`
+            `Invalid amount for funding proposal. Please enter a positive number not exceeding $${MAX_AMOUNT}.`
           );
         }
       }
 
-      if (
-        newProposal.type === "voting" &&
-        newProposal.options.filter((o) => o !== "").length < 2
-      ) {
-        throw new Error("Voting proposal must have at least two options");
+      console.log("Attempting to create proposal:", newProposal);
+
+      const votingPeriod = (7 * 24 * 60 * 60).toString(); // 7 days in seconds
+      const amountBN = parseFloat(newProposal.amount);
+
+      // Ensure params.id is a valid string
+      if (!params.id || typeof params.id !== "string") {
+        throw new Error("Invalid community ID");
       }
 
       const createdProposal = await createProposal(
+        user.id,
         params.id,
         newProposal.type as "funding" | "voting",
         newProposal.description,
-        newProposal.type === "funding" ? newProposal.amount : undefined,
-        newProposal.type === "voting"
-          ? newProposal.options.filter((o) => o !== "")
-          : undefined
+        votingPeriod,
+        newProposal.type === "funding" ? 0 : 1, // 0 for funding, 1 for voting
+        newProposal.type === "funding" ? amountBN : undefined
       );
+
+      console.log("Proposal created successfully:", createdProposal);
 
       setProposals([...proposals, createdProposal]);
       setNewProposal({
         type: "funding",
         description: "",
         amount: "",
-        options: ["", ""],
       });
       setShowCreateForm(false);
     } catch (error) {
@@ -129,16 +144,68 @@ export default function CommunityProposals({
     }
   }
 
+  async function handleContributeFunds(proposalId: string) {
+    if (!user || !isMember) return;
+
+    try {
+      const amount = parseFloat(contributionAmount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error("Invalid contribution amount");
+      }
+
+      await contributeFunds(proposalId, amount);
+      // Refresh proposals and community fund balance after contribution
+      const fetchedProposals = await getProposals(params.id);
+      setProposals(fetchedProposals);
+      setContributionAmount("");
+    } catch (error) {
+      console.error("Error contributing funds:", error);
+      alert(
+        error instanceof Error ? error.message : "Failed to contribute funds"
+      );
+    }
+  }
+
   if (loading) {
-    return <div>Loading...</div>;
+    return <div className="text-black">Loading...</div>;
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Community Proposals</h1>
+    <div className="container mx-auto px-4 py-8 bg-white text-black">
+      <div className="flex items-center mb-6">
+        <button
+          onClick={() => router.back()}
+          className="mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors"
+          aria-label="Go back"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 className="text-3xl font-bold">Community Proposals</h1>
+      </div>
+
+      {isMember && (
+        <button
+          onClick={() => setShowCreateForm(true)}
+          className="btn text-black border-black hover:bg-gray-100 mb-6"
+        >
+          Create New Proposal
+        </button>
+      )}
 
       {showCreateForm && isMember && (
-        <div className="mb-8">
+        <div className="mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
           <h2 className="text-2xl font-semibold mb-4">Create New Proposal</h2>
           <select
             value={newProposal.type}
@@ -174,43 +241,19 @@ export default function CommunityProposals({
             />
           )}
           {newProposal.type === "voting" && (
-            <div>
-              {newProposal.options.map((option, index) => (
-                <input
-                  key={index}
-                  type="text"
-                  value={option}
-                  onChange={(e) => {
-                    const newOptions = [...newProposal.options];
-                    newOptions[index] = e.target.value;
-                    setNewProposal({ ...newProposal, options: newOptions });
-                  }}
-                  placeholder={`Option ${index + 1}`}
-                  className="input input-bordered w-full mb-2"
-                />
-              ))}
-              <button
-                onClick={() =>
-                  setNewProposal({
-                    ...newProposal,
-                    options: [...newProposal.options, ""],
-                  })
-                }
-                className="btn btn-secondary mb-2"
-              >
-                Add Option
-              </button>
-            </div>
+            <p className="text-sm text-gray-600 mb-2">
+              Note: Voting proposals have a simple "For" or "Against" format.
+            </p>
           )}
           <button
             onClick={handleCreateProposal}
-            className="btn btn-primary mr-2"
+            className="btn  text-black border-black hover:bg-gray-100 mr-2"
           >
             Create Proposal
           </button>
           <button
             onClick={() => setShowCreateForm(false)}
-            className="btn btn-secondary"
+            className="btn  text-black border-black hover:bg-gray-100"
           >
             Cancel
           </button>
@@ -222,68 +265,105 @@ export default function CommunityProposals({
         {proposals.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-xl mb-4">No active proposals at the moment.</p>
-            {isMember && !showCreateForm && (
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="btn btn-primary"
-              >
-                Create New Proposal
-              </button>
-            )}
           </div>
         ) : (
           proposals.map((proposal) => (
-            <div key={proposal.id} className="mb-4 p-4 border rounded">
+            <div
+              key={proposal.id}
+              className="mb-4 p-4 border border-gray-200 rounded bg-gray-50"
+            >
               <h3 className="text-xl font-semibold">{proposal.description}</h3>
               <p>Type: {proposal.type}</p>
               {proposal.type === "funding" && (
-                <p>
-                  Amount: ${ethers.utils.formatEther(proposal.amount || "0")}{" "}
-                  ETH
-                </p>
-              )}
-              {proposal.type === "voting" && (
-                <div>
-                  <p>Options:</p>
-                  <ul>
-                    {proposal.options?.map((option, index) => (
-                      <li key={index}>{option}</li>
-                    ))}
-                  </ul>
-                </div>
+                <>
+                  <p>Target Amount: ${proposal.amount} USD</p>
+                  <p>Amount Received: ${proposal.amount_received || "0"} USD</p>
+                  {parseFloat(proposal.amount_received || "0") <
+                    parseFloat(proposal.amount || "0") &&
+                    proposal.type === "funding" &&
+                    proposal.status === "active" &&
+                    isMember && (
+                      <div className="mt-4">
+                        <input
+                          type="number"
+                          value={contributionAmount}
+                          onChange={(e) =>
+                            setContributionAmount(e.target.value)
+                          }
+                          placeholder="Contribution amount (USD)"
+                          className="input input-bordered w-full max-w-xs mr-2"
+                        />
+                        <button
+                          onClick={() => handleContributeFunds(proposal.id)}
+                          className="btn btn-sm  text-black border-black hover:bg-gray-100"
+                        >
+                          Contribute Funds
+                        </button>
+                      </div>
+                    )}
+                </>
               )}
               {isMember && proposal.status === "active" && (
                 <div>
-                  <button
-                    onClick={() => handleVote(proposal.id, true)}
-                    className="btn btn-sm mr-2"
-                  >
-                    Vote For
-                  </button>
-                  <button
-                    onClick={() => handleVote(proposal.id, false)}
-                    className="btn btn-sm"
-                  >
-                    Vote Against
-                  </button>
+                  {proposal.type === "voting" ? (
+                    <>
+                      {getUserVote(proposal) ? (
+                        <p className="text-sm text-gray-600 mt-2">
+                          You have voted: {getUserVote(proposal)}
+                        </p>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleVote(proposal.id, true)}
+                            className="btn btn-sm  text-black border-black hover:bg-gray-100 mr-2"
+                          >
+                            Vote For
+                          </button>
+                          <button
+                            onClick={() => handleVote(proposal.id, false)}
+                            className="btn btn-sm  text-black border-black hover:bg-gray-100"
+                          >
+                            Vote Against
+                          </button>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-600 mt-2">
+                      This is a funding proposal. Voting is not applicable.
+                    </p>
+                  )}
                 </div>
               )}
-              {proposal.votes && (
+              {proposal.votes && proposal.type === "voting" && (
                 <div>
-                  <p>Votes For: {proposal.votes.for}</p>
-                  <p>Votes Against: {proposal.votes.against}</p>
+                  <p>
+                    Total Votes:{" "}
+                    {parseInt(proposal.votes.for) -
+                      parseInt(proposal.votes.against)}
+                  </p>
+                  <div>
+                    <p>Votes For: {proposal.votes.for}</p>
+                    <ul className="list-disc list-inside ml-4">
+                      {proposal.votes.voters
+                        .filter((voter) => voter.support)
+                        .map((voter, index) => (
+                          <li key={index}>{voter.name}</li>
+                        ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p>Votes Against: {proposal.votes.against}</p>
+                    <ul className="list-disc list-inside ml-4">
+                      {proposal.votes.voters
+                        .filter((voter) => !voter.support)
+                        .map((voter, index) => (
+                          <li key={index}>{voter.name}</li>
+                        ))}
+                    </ul>
+                  </div>
                 </div>
               )}
-              {proposal.type === "funding" &&
-                proposal.status === "active" &&
-                isMember && (
-                  <button
-                    onClick={() => handleExecuteFundingProposal(proposal.id)}
-                    className="btn btn-sm mt-2"
-                  >
-                    Execute Funding
-                  </button>
-                )}
             </div>
           ))
         )}
